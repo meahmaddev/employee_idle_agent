@@ -1,0 +1,36 @@
+# Short thresholds for offline spike testing (not production).
+# Production values remain in config/idle_rules.yaml.
+
+version: "1.0"
+demo: true
+ignore_shifts: true
+
+evaluation:
+  tick_seconds: 1
+  motion_window_seconds: 3
+  person_confidence_min: 0.45
+  debounce_leave_seconds: 3
+
+# Lock onto one person per desk; ignore others in the polygon
+primary_track:
+  enabled: true
+  # Keep locked operator through lean/track loss; only then start AWAY timing
+  lost_grace_seconds: 60
+  assign_dwell_seconds: 0.5
+  match_center_dist: 0.12
+  match_iou: 0.15
+
+motion:
+  idle_threshold: 0.08
+  active_threshold: 0.12
+  method: "pose_joint_displacement"
+
+thresholds:
+  idle_confirm_seconds: 180   # 3 min present + low motion → IDLE
+  away_confirm_seconds: 300   # 5 min empty → AWAY
+  escalate_seconds: 900       # 15 min after start → ESCALATED
+  end_grace_seconds: 10
+
+# Snapshot JPEGs written under output/evidence/ for STARTED/ESCALATED events
+events:
+  include_snapshot: true

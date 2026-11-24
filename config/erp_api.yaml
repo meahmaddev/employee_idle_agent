@@ -1,0 +1,52 @@
+# Outbound ERP / software API adapter — Employee Idle Time events
+# Secrets via environment variables only — never commit tokens.
+
+version: "1.0"
+
+erp:
+  name: "Factory ERP / Contech Software"
+  # Replace with your real base URL
+  base_url: "${ERP_BASE_URL}"          # e.g. https://erp.example.com
+  events_path: "/api/v1/vision/idle-events"
+  method: POST
+  timeout_seconds: 10
+
+auth:
+  type: api_key                        # api_key | bearer_jwt
+  header: "X-API-Key"
+  # Or for bearer: header "Authorization", value "Bearer ${ERP_API_TOKEN}"
+  token_env: "ERP_API_TOKEN"
+
+headers:
+  Content-Type: "application/json"
+  Accept: "application/json"
+  X-Source: "cctv-idle-agent"
+
+retry:
+  max_attempts: 5
+  backoff_initial_seconds: 2
+  backoff_multiplier: 2
+  backoff_max_seconds: 60
+  retry_on_http: [408, 429, 500, 502, 503, 504]
+
+idempotency:
+  header: "Idempotency-Key"
+  # Key format: {camera_id}:{zone_id}:{event_type}:{started_at_truncated}
+
+queue:
+  backend: redis_streams               # redis_streams | rabbitmq
+  stream_name: "idle_events"
+  consumer_group: "erp_api_adapter"
+  dead_letter_stream: "idle_events_dlq"
+
+# Optional inbound (Phase 1b): pull shift/break from ERP
+inbound:
+  enabled: false
+  shifts_path: "/api/v1/hr/shifts"
+  poll_minutes: 60
+
+# Local audit always on even if ERP is down
+audit:
+  store: postgresql
+  connection_env: "DATABASE_URL"
+  table: "idle_events"

@@ -1,0 +1,65 @@
+# Pilot camera inventory — Employee Idle Time (Phase 1)
+# Replace PLACEHOLDER_* values with factory NVR / camera credentials.
+# Prefer env vars for passwords: ${NVR_PASSWORD}
+
+version: "1.0"
+site:
+  name: "Factory Pilot Site"
+  timezone: "Asia/Karachi"
+  notes: "Start with 1–2 cameras / 2–4 zones before scaling."
+
+defaults:
+  protocol: rtsp
+  preferred_stream: sub  # sub = lower res for inference; main for evidence snapshots
+  target_inference_fps: 8
+  codec: h264
+  onvif_enabled: true
+
+cameras:
+  - id: cam-01
+    name: "Assembly Line A — Overview"
+    enabled: true
+    pilot: true
+    location: "Assembly Hall A"
+    mount: "overhead-angled"  # preferred: overhead | overhead-angled | wall
+    brand: "PLACEHOLDER_BRAND"  # e.g. Hikvision, Dahua
+    nvr:
+      host: "PLACEHOLDER_NVR_HOST"
+      channel: 1
+    rtsp:
+      # Example: rtsp://user:pass@192.168.1.10:554/Streaming/Channels/102
+      main: "rtsp://${NVR_USER}:${NVR_PASSWORD}@PLACEHOLDER_NVR_HOST:554/Streaming/Channels/101"
+      sub: "rtsp://${NVR_USER}:${NVR_PASSWORD}@PLACEHOLDER_NVR_HOST:554/Streaming/Channels/102"
+    resolution:
+      main: "1920x1080"
+      sub: "640x360"
+    fps_native: 25
+    covers_zones:
+      - ws-assembly-1
+      - ws-assembly-2
+    notes: "Primary pilot camera. Ensure full workstation bodies visible, not faces-only."
+
+  - id: cam-02
+    name: "Assembly Line B — Overview"
+    enabled: true
+    pilot: true
+    location: "Assembly Hall B"
+    mount: "overhead-angled"
+    brand: "PLACEHOLDER_BRAND"
+    nvr:
+      host: "PLACEHOLDER_NVR_HOST"
+      channel: 2
+    rtsp:
+      main: "rtsp://${NVR_USER}:${NVR_PASSWORD}@PLACEHOLDER_NVR_HOST:554/Streaming/Channels/201"
+      sub: "rtsp://${NVR_USER}:${NVR_PASSWORD}@PLACEHOLDER_NVR_HOST:554/Streaming/Channels/202"
+    resolution:
+      main: "1920x1080"
+      sub: "640x360"
+    fps_native: 25
+    covers_zones:
+      - ws-assembly-3
+      - ws-assembly-4
+    notes: "Second pilot camera for multi-zone calibration."
+
+# Non-pilot cameras listed for future scale (disabled)
+# Add more entries with pilot: false, enabled: false as inventory grows.

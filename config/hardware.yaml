@@ -1,0 +1,61 @@
+# On-prem inference host sizing — Phase 1 pilot (1–2 cameras @ 5–10 FPS)
+
+version: "1.0"
+pilot:
+  cameras: 2
+  zones: 4
+  target_inference_fps_per_camera: 8
+  model: "yolov8s-pose"              # yolov8n-pose for Jetson; yolov8s-pose for desktop GPU
+  tracker: "bytetrack"
+  input_resolution: "640x360"        # sub-stream
+
+# Recommended host profiles (pick one)
+profiles:
+  desktop_gpu:
+    name: "Factory PC / Server with NVIDIA GPU"
+    recommended: true
+    for_pilot: true
+    gpu:
+      min: "NVIDIA GTX 1660 / RTX 3050 (4 GB VRAM)"
+      recommended: "NVIDIA RTX 3060 / T4 (8 GB+ VRAM)"
+    cpu: "6+ cores"
+    ram_gb: 16
+    storage_gb: 256
+    os: "Ubuntu 22.04 LTS or Windows 10/11 + CUDA"
+    estimated_capacity: "2–4 cameras @ 8 FPS with YOLOv8s-pose"
+
+  jetson_edge:
+    name: "NVIDIA Jetson (edge appliance)"
+    recommended: false
+    for_pilot: true
+    device: "Jetson Orin Nano / Orin NX"
+    notes: "Use yolov8n-pose; good for 1–2 cameras"
+    ram_gb: 8
+    estimated_capacity: "1–2 cameras @ 5–8 FPS with YOLOv8n-pose"
+
+# Supporting services (same host OK for pilot; split later)
+services:
+  redis:
+    memory_mb: 256
+    persistence: aof
+  postgresql:
+    memory_mb: 512
+    disk_gb_for_events: 20
+  snapshots:
+    disk_gb: 50
+    retention_days: 30
+
+# Network
+network:
+  require_lan_access_to_nvr: true
+  outbound_https_to_erp: true
+  ports_local:
+    - 8000   # FastAPI health/admin
+    - 5432   # PostgreSQL (bind localhost)
+    - 6379   # Redis (bind localhost)
+
+# Headroom rules before adding cameras
+scaling:
+  max_gpu_util_percent: 75
+  max_vram_util_percent: 80
+  add_worker_when_cameras_exceed: 4

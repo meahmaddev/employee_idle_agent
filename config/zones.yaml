@@ -1,0 +1,71 @@
+# Workstation ROI zones — polygons in normalized image coordinates [0.0–1.0]
+# Origin: top-left. Format: [[x, y], ...] clockwise.
+# Draw/adjust after capturing a still frame from each camera's sub-stream.
+
+version: "1.0"
+coordinate_space: normalized_frame  # independent of resolution
+
+zones:
+  # Primary pilot desk (cam-01 pharmacy counter operator)
+  - id: ws-counter-1
+    name: "Computer operator desk 1"
+    camera_id: cam-01
+    enabled: true
+    expected_occupancy: 1
+    polygon:
+      - [0.2307, 0.3074]
+      - [0.3953, 0.3074]
+      - [0.3953, 0.8333]
+      - [0.2307, 0.8333]
+    # Keyboard / counter band. Wrists here count as working even if the body is still.
+    work_polygon:
+      - [0.235, 0.400]
+      - [0.395, 0.400]
+      - [0.395, 0.640]
+      - [0.235, 0.640]
+    # Chair pocket (closer to the camera). In the zone but outside this polygon = off seat.
+    # Slightly wider than the desk so a lean while seated stays "on seat".
+    seat_polygon:
+      - [0.200, 0.580]
+      - [0.420, 0.580]
+      - [0.420, 0.840]
+      - [0.200, 0.840]
+    notes: "Desk rect from still (x=443 y=332 w=316 h=568). Seat and work are sub-regions of that desk."
+
+  # Additional cam-01 desks — enable after drawing polygons
+  # - id: ws-counter-2
+  #   name: "Computer operator desk 2"
+  #   camera_id: cam-01
+  #   enabled: false
+  #   expected_occupancy: 1
+  #   polygon:
+  #     - [0.52, 0.35]
+  #     - [0.95, 0.35]
+  #     - [0.95, 0.95]
+  #     - [0.52, 0.95]
+  #   notes: "Draw from still before enabling."
+
+  # cam-02 placeholders disabled until that camera is calibrated
+  - id: ws-assembly-3
+    name: "Workstation Assembly 3"
+    camera_id: cam-02
+    enabled: false
+    expected_occupancy: 1
+    polygon:
+      - [0.05, 0.30]
+      - [0.48, 0.30]
+      - [0.48, 0.95]
+      - [0.05, 0.95]
+    notes: "Left half of cam-02. Disabled until cam-02 pilot."
+
+  - id: ws-assembly-4
+    name: "Workstation Assembly 4"
+    camera_id: cam-02
+    enabled: false
+    expected_occupancy: 1
+    polygon:
+      - [0.52, 0.30]
+      - [0.95, 0.30]
+      - [0.95, 0.95]
+      - [0.52, 0.95]
+    notes: "Right half of cam-02. Disabled until cam-02 pilot."

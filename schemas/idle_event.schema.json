@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contech.local/schemas/idle_event.schema.json",
+  "title": "IdleTimeVisionEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "event_type",
+    "camera_id",
+    "zone_id",
+    "started_at",
+    "duration_seconds",
+    "confidence",
+    "idempotency_key"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique id for this emission"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "IDLE_STARTED",
+        "IDLE_ESCALATED",
+        "IDLE_ENDED",
+        "AWAY_STARTED",
+        "AWAY_ESCALATED",
+        "AWAY_ENDED",
+        "PHONE_STARTED",
+        "PHONE_ESCALATED",
+        "PHONE_ENDED",
+        "INTERACTING_STARTED",
+        "INTERACTING_ESCALATED",
+        "INTERACTING_ENDED",
+        "OFF_SEAT_STARTED",
+        "OFF_SEAT_ESCALATED",
+        "OFF_SEAT_ENDED",
+        "NOT_WORKING_STARTED",
+        "NOT_WORKING_ESCALATED",
+        "NOT_WORKING_ENDED"
+      ]
+    },
+    "camera_id": {
+      "type": "string",
+      "examples": ["cam-01"]
+    },
+    "zone_id": {
+      "type": "string",
+      "examples": ["ws-assembly-3"]
+    },
+    "track_id": {
+      "type": ["string", "null"],
+      "description": "Anonymous tracker id; null for AWAY when no person",
+      "examples": ["t-4821"]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 UTC or offset datetime when the idle/away condition began"
+    },
+    "ended_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Set on *_ENDED events"
+    },
+    "duration_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "snapshot_url": {
+      "type": ["string", "null"],
+      "description": "Optional local/MinIO path to evidence still"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "camera_id:zone_id:event_type:started_at"
+    },
+    "site_timezone": {
+      "type": "string",
+      "default": "Asia/Karachi"
+    },
+    "motion_score": {
+      "type": ["number", "null"],
+      "description": "Last averaged motion score at emission time"
+    },
+    "reason": {
+      "type": ["string", "null"],
+      "description": "low_motion, empty, phone, talking, off_seat, or not_working"
+    },
+    "phone_score": {
+      "type": ["number", "null"],
+      "description": "Wrist-to-ear / wrist-to-face score at emission, 0 to 1"
+    },
+    "seat_occupied": {
+      "type": ["boolean", "null"],
+      "description": "Primary hips inside the seat polygon"
+    },
+    "working": {
+      "type": ["boolean", "null"],
+      "description": "A wrist inside the work polygon"
+    },
+    "interacting": {
+      "type": ["boolean", "null"],
+      "description": "Another person close to the primary, facing them when pose allows"
+    }
+  }
+}

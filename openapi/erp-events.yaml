@@ -1,0 +1,156 @@
+openapi: 3.0.3
+info:
+  title: Factory Vision Idle Events API
+  description: |
+    Outbound contract — the CCTV idle agent POSTs events to your ERP/software.
+    Your system implements this endpoint; the agent is the client.
+  version: 1.0.0
+servers:
+  - url: https://erp.example.com
+    description: Replace with ERP_BASE_URL
+paths:
+  /api/v1/vision/idle-events:
+    post:
+      operationId: receiveIdleEvent
+      summary: Receive an employee idle/away vision event
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Unique key to prevent duplicate processing on retries
+        - name: X-API-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdleTimeVisionEvent"
+            example:
+              event_id: "550e8400-e29b-41d4-a716-446655440000"
+              event_type: "IDLE_STARTED"
+              camera_id: "cam-01"
+              zone_id: "ws-assembly-3"
+              track_id: "t-4821"
+              started_at: "2026-11-17T10:00:00+05:00"
+              ended_at: null
+              duration_seconds: 180
+              confidence: 0.87
+              snapshot_url: "file:///var/lib/cctv-idle/snapshots/cam-01_ws-assembly-3_20261117T100000.jpg"
+              idempotency_key: "cam-01:ws-assembly-3:IDLE_STARTED:2026-11-17T10:00:00+05:00"
+              site_timezone: "Asia/Karachi"
+              motion_score: 0.04
+      responses:
+        "202":
+          description: Accepted for processing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: accepted
+                  event_id:
+                    type: string
+                    format: uuid
+        "200":
+          description: Processed synchronously
+        "401":
+          description: Unauthorized
+        "409":
+          description: Duplicate idempotency key (treat as success on agent side)
+        "422":
+          description: Validation error
+        "500":
+          description: Server error (agent will retry)
+components:
+  schemas:
+    IdleTimeVisionEvent:
+      type: object
+      required:
+        - event_id
+        - event_type
+        - camera_id
+        - zone_id
+        - started_at
+        - duration_seconds
+        - confidence
+        - idempotency_key
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+          enum:
+            - IDLE_STARTED
+            - IDLE_ESCALATED
+            - IDLE_ENDED
+            - AWAY_STARTED
+            - AWAY_ESCALATED
+            - AWAY_ENDED
+            - PHONE_STARTED
+            - PHONE_ESCALATED
+            - PHONE_ENDED
+            - INTERACTING_STARTED
+            - INTERACTING_ESCALATED
+            - INTERACTING_ENDED
+            - OFF_SEAT_STARTED
+            - OFF_SEAT_ESCALATED
+            - OFF_SEAT_ENDED
+            - NOT_WORKING_STARTED
+            - NOT_WORKING_ESCALATED
+            - NOT_WORKING_ENDED
+        camera_id:
+          type: string
+        zone_id:
+          type: string
+        track_id:
+          type: string
+          nullable: true
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+        duration_seconds:
+          type: integer
+          minimum: 0
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        snapshot_url:
+          type: string
+          nullable: true
+        idempotency_key:
+          type: string
+        site_timezone:
+          type: string
+        motion_score:
+          type: number
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+          description: low_motion, empty, phone, talking, off_seat, or not_working
+        phone_score:
+          type: number
+          nullable: true
+        seat_occupied:
+          type: boolean
+          nullable: true
+        working:
+          type: boolean
+          nullable: true
+        interacting:
+          type: boolean
+          nullable: true
