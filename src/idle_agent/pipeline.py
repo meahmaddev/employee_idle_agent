@@ -83,6 +83,9 @@ def _draw_people(
         label = f"{tag}{p.track_id} m={p.motion_score:.3f}"
         if phone >= 0.2:
             label += f" ph={phone:.2f}"
+        head_lift = getattr(p, "head_lift", None)
+        if head_lift is not None:
+            label += f" hl={head_lift:.2f}"
         cv2.putText(
             frame,
             label,
@@ -109,6 +112,8 @@ _EVIDENCE_EVENT_TYPES = {
     "OFF_SEAT_ESCALATED",
     "NOT_WORKING_STARTED",
     "NOT_WORKING_ESCALATED",
+    "HEAD_DOWN_STARTED",
+    "HEAD_DOWN_ESCALATED",
 }
 
 
@@ -222,7 +227,8 @@ def run_pipeline(
     )
     print(
         f"Behaviors: phone={sm.phone_confirm}s talking={sm.talk_confirm}s "
-        f"off_seat={sm.off_seat_confirm}s not_working={sm.not_working_confirm}s"
+        f"off_seat={sm.off_seat_confirm}s not_working={sm.not_working_confirm}s "
+        f"head_down={sm.head_down_confirm}s"
     )
     print(
         f"Primary track: enabled={primary.enabled} "
@@ -274,6 +280,7 @@ def run_pipeline(
                         )
                         if person is not None:
                             person.phone_score = signals.phone_score
+                            person.head_lift = signals.head_lift
                         motion = person.motion_score if person else 0.0
                         track_id = prim_id or (person.track_id if person else None)
                         confidence = person.confidence if person else 0.0

@@ -16,6 +16,8 @@ from idle_agent.zones import Zone, point_in_polygon
 
 # COCO-17 indices used by YOLOv8-pose
 NOSE = 0
+LEFT_EYE = 1
+RIGHT_EYE = 2
 LEFT_EAR = 3
 RIGHT_EAR = 4
 LEFT_SHOULDER = 5
@@ -38,6 +40,9 @@ class ZoneSignals:
     interacting: bool = False
     interaction_track_id: Optional[str] = None
     interaction_dist: float = 0.0
+    # Head resting on the desk / arms (sleeping). head_lift in torso lengths.
+    head_down: bool = False
+    head_lift: Optional[float] = None
 
 
 def _cfg(block: dict, key: str, default):
@@ -58,6 +63,9 @@ class BehaviorScorer:
         self.max_center_dist = float(talk.get("max_center_dist", 0.16))
         self.close_dist = float(talk.get("close_dist", 0.07))
         self.facing_dot = float(talk.get("facing_dot", 0.15))
+        head = cfg.get("head_down") or {}
+        self.head_enabled = bool(head.get("enabled", True))
+        self.max_head_lift = float(head.get("max_head_lift", 0.10))
 
     def score(
         self,
@@ -92,10 +100,15 @@ class BehaviorScorer:
                 self.close_dist,
                 self.facing_dot,
             )
+        head_lift = head_lift_of(person, self.kp_conf) if self.head_enabled else None
+        head_down = head_lift is not None and head_lift <= self.max_head_lift
         return ZoneSignals(
             seat_occupied=seat,
             phone_score=phone_score,
-            phone=phone_score >= self.phone_min_score,
+            # A head on the desk puts both wrists next to it; that is not a phone.
+            phone=phone_score >= self.phone_min_score and not head_down,
+            head_down=head_down,
+            head_lift=head_lift,
             hands_known=hands_known,
             working=working,
             interacting=interacting,
@@ -170,6 +183,41 @@ def phone_score_of(
             if in_front and near_column and ratio <= face_ratio:
                 face_score = max(face_score, (face_ratio - ratio) / face_ratio)
     return float(max(0.0, min(1.0, max(ear_score, face_score))))
+
+
+def head_lift_of(person: PersonDetection, conf_min: float) -> Optional[float]:
+    """How high the head sits above the shoulders, in torso lengths.
+
+    Upright (typing, reading, looking at the screen): about 0.2-0.45.
+    Head resting on the desk or on the arms: about 0 or below.
+    None when the head or the shoulders are not visible.
+    """
+    kps = person.keypoints
+    shoulders = [
+        p for p in (_kp(kps, LEFT_SHOULDER, conf_min), _kp(kps, RIGHT_SHOULDER, conf_min)) if p
+    ]
+    head = [
+        p
+        for p in (_kp(kps, i, conf_min) for i in (NOSE, LEFT_EYE, RIGHT_EYE, LEFT_EAR, RIGHT_EAR))
+        if p
+    ]
+    if not shoulders or not head:
+        return None
+    shoulder_x = sum(p[0] for p in shoulders) / len(shoulders)
+    shoulder_y = sum(p[1] for p in shoulders) / len(shoulders)
+    head_y = min(p[1] for p in head)  # highest visible head point (image y grows downward)
+    hips = [p for p in (_kp(kps, LEFT_HIP, conf_min), _kp(kps, RIGHT_HIP, conf_min)) if p]
+    if hips:
+        hip_x = sum(p[0] for p in hips) / len(hips)
+        hip_y = sum(p[1] for p in hips) / len(hips)
+        scale = float(np.hypot(hip_x - shoulder_x, hip_y - shoulder_y))
+    else:
+        # Hips hidden behind the desk: use the box size as a rough torso length.
+        x1, y1, x2, y2 = person.bbox_xyxy
+        scale = 0.5 * max(y2 - y1, x2 - x1)
+    if scale < 15.0:
+        return None
+    return float((shoulder_y - head_y) / scale)
 
 
 def _norm(px: float, py: float, frame_w: int, frame_h: int) -> Tuple[float, float]:

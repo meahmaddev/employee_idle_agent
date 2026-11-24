@@ -19,6 +19,8 @@ class PersonDetection:
     keypoints: Optional[np.ndarray] = None  # (K, 3) x, y, confidence
     motion_score: float = 0.0
     phone_score: float = 0.0
+    # Head height above the shoulders in torso lengths (None = not visible)
+    head_lift: Optional[float] = None
 
 
 @dataclass

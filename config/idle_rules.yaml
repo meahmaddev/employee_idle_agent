@@ -55,6 +55,11 @@ behaviors:
     enabled: true
     confirm_seconds: 60           # on the seat, both wrists outside the work polygon
     end_grace_seconds: 8
+  head_down:
+    enabled: true
+    max_head_lift: 0.10           # head this close to shoulder height (torso lengths) = resting on desk/arms
+    confirm_seconds: 60           # sustained before HEAD_DOWN_STARTED (sleeping at the desk)
+    end_grace_seconds: 5
 
 # Confirm durations before emitting events
 thresholds:

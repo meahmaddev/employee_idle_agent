@@ -45,6 +45,23 @@ Outputs: `output/preview.mp4` and `output/events.jsonl`.
 
 Live RTSP (after NVR credentials): same CLI with `--source rtsp --url "rtsp://..."`.
 
+## Phone camera test (IP Webcam)
+
+`config/demo_phone.yaml` holds short test timers (30 s idle/away, 20 s head-down),
+ignores people who only pass through the zone (5 s dwell) and keeps detecting a
+person slumped over the desk (lower person confidence):
+
+```bash
+python -m idle_agent --source rtsp --url "http://127.0.0.1:9090/video" \
+  --camera-id phone-01 --zones config/zones_phone.yaml \
+  --demo-overrides config/demo_phone.yaml --device cuda:0 --live-view-port 8090
+```
+
+Events: IDLE, AWAY, PHONE, INTERACTING, OFF_SEAT, NOT_WORKING and HEAD_DOWN
+(head resting on the desk or arms - sleeping). The live view shows `hl=` next to
+each person: head height above the shoulders in torso lengths (upright about
+0.2-0.45, head on desk 0.10 or below).
+
 ## Live view (watch what the model sees)
 
 Add `--live-view-port 8090` to any run, then open `http://localhost:8090`.

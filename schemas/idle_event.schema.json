@@ -40,7 +40,10 @@
         "OFF_SEAT_ENDED",
         "NOT_WORKING_STARTED",
         "NOT_WORKING_ESCALATED",
-        "NOT_WORKING_ENDED"
+        "NOT_WORKING_ENDED",
+        "HEAD_DOWN_STARTED",
+        "HEAD_DOWN_ESCALATED",
+        "HEAD_DOWN_ENDED"
       ]
     },
     "camera_id": {

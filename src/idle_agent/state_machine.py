@@ -109,6 +109,7 @@ class _ZoneRuntime:
     interacting: _FlagRuntime = field(default_factory=_FlagRuntime)
     off_seat: _FlagRuntime = field(default_factory=_FlagRuntime)
     not_working: _FlagRuntime = field(default_factory=_FlagRuntime)
+    head_down: _FlagRuntime = field(default_factory=_FlagRuntime)
     last_phone_score: float = 0.0
     last_seat_occupied: bool = False
     last_working: bool = False
@@ -146,6 +147,7 @@ class ZoneStateMachine:
         talk = beh.get("interacting") or {}
         off = beh.get("off_seat") or {}
         idle_hands = beh.get("not_working") or {}
+        head = beh.get("head_down") or {}
         self.phone_enabled = bool(phone.get("enabled", True))
         self.phone_min_score = float(phone.get("min_score", 0.40))
         self.phone_clear_score = float(phone.get("clear_score", 0.20))
@@ -160,6 +162,9 @@ class ZoneStateMachine:
         self.not_working_enabled = bool(idle_hands.get("enabled", True))
         self.not_working_confirm = float(idle_hands.get("confirm_seconds", 60))
         self.not_working_grace = float(idle_hands.get("end_grace_seconds", 8))
+        self.head_down_enabled = bool(head.get("enabled", True))
+        self.head_down_confirm = float(head.get("confirm_seconds", 60))
+        self.head_down_grace = float(head.get("end_grace_seconds", 5))
         self._zones: Dict[str, _ZoneRuntime] = {zid: _ZoneRuntime() for zid in zone_ids}
 
     def _iso(self, t_seconds: float) -> str:
@@ -191,7 +196,12 @@ class ZoneStateMachine:
 
         # Hands on the keyboard/counter are work, even when the joints barely move.
         if signals is not None and getattr(signals, "hands_known", False) and getattr(signals, "working", False):
-            if not getattr(signals, "phone", False) and not getattr(signals, "interacting", False):
+            if (
+                not getattr(signals, "phone", False)
+                and not getattr(signals, "interacting", False)
+                # Sleeping on the keyboard is not work.
+                and not getattr(signals, "head_down", False)
+            ):
                 low_motion = False
                 high_motion = True
 
@@ -367,9 +377,17 @@ class ZoneStateMachine:
             return []
         events: List[IdleEvent] = []
         phone_score = float(getattr(signals, "phone_score", 0.0) or 0.0)
+        head_on = (
+            self.head_down_enabled
+            and occupied
+            and bool(getattr(signals, "head_down", False))
+        )
         phone_hot = rt.phone.active or rt.phone.candidate_since is not None
-        phone_on = self.phone_enabled and phone_score >= (
-            self.phone_clear_score if phone_hot else self.phone_min_score
+        phone_on = (
+            self.phone_enabled
+            and not head_on
+            and phone_score
+            >= (self.phone_clear_score if phone_hot else self.phone_min_score)
         )
         talk_on = self.talk_enabled and bool(getattr(signals, "interacting", False))
         off_seat = (
@@ -385,9 +403,18 @@ class ZoneStateMachine:
             and not bool(getattr(signals, "working", False))
             and not phone_on
             and not talk_on
+            and not head_on
         )
         steps = (
             (rt.phone, phone_on, self.phone_confirm, self.phone_grace, "PHONE", "phone"),
+            (
+                rt.head_down,
+                head_on,
+                self.head_down_confirm,
+                self.head_down_grace,
+                "HEAD_DOWN",
+                "head_down",
+            ),
             (rt.interacting, talk_on, self.talk_confirm, self.talk_grace, "INTERACTING", "talking"),
             (rt.off_seat, off_seat, self.off_seat_confirm, self.off_seat_grace, "OFF_SEAT", "off_seat"),
             (
@@ -592,5 +619,7 @@ class ZoneStateMachine:
                 active.append("off_seat")
             if rt.not_working.active:
                 active.append("not_working")
+            if rt.head_down.active:
+                active.append("head_down")
             labels[zid] = active
         return labels

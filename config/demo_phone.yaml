@@ -1,0 +1,38 @@
+# Phone camera (IP Webcam) test settings: short timers so a few minutes of
+# testing shows every event. Production values stay in config/idle_rules.yaml.
+# Use with: --demo-overrides config/demo_phone.yaml
+
+version: "1.0"
+demo: true
+ignore_shifts: true
+
+evaluation:
+  tick_seconds: 1
+  motion_window_seconds: 3
+  person_confidence_min: 0.30   # keep detecting a person slumped over the desk
+  debounce_leave_seconds: 3
+
+primary_track:
+  enabled: true
+  lost_grace_seconds: 10        # AWAY timing starts 10 s after the operator disappears
+  assign_dwell_seconds: 5       # must stay 5 s in the zone to count as the operator (ignores passers-by)
+  match_center_dist: 0.12
+  match_iou: 0.15
+
+motion:
+  idle_threshold: 0.08
+  active_threshold: 0.12
+  method: "pose_joint_displacement"
+
+thresholds:
+  idle_confirm_seconds: 30
+  away_confirm_seconds: 30
+  escalate_seconds: 900
+  end_grace_seconds: 10
+
+behaviors:
+  head_down:
+    confirm_seconds: 20         # head on the desk for 20 s -> HEAD_DOWN_STARTED
+
+events:
+  include_snapshot: true
