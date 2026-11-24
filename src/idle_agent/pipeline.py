@@ -184,6 +184,7 @@ def run_pipeline(
     write_preview: bool = True,
     clip_start: Optional[datetime] = None,
     preview_scale: float = 1.0,
+    live_view_port: Optional[int] = None,
 ) -> Tuple[Path, Path]:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -235,139 +236,153 @@ def run_pipeline(
     event_count = 0
     snapshot_count = 0
     wall_start = time.time()
+    live_view = None
+    if live_view_port:
+        from idle_agent.live_view import LiveView
 
-    with VideoSource(source_uri, source_type=source_type, max_frames=max_frames) as source:
-        sample_every = max(1, int(round(source.source_fps / max(target_fps, 0.1))))
-        print(
-            f"Opened {source_type}: {source_uri} "
-            f"({source.frame_width}x{source.frame_height} @ {source.source_fps:.1f} fps, "
-            f"sample every {sample_every} frame(s) → ~{target_fps} FPS)"
-        )
+        live_view = LiveView(live_view_port)
+        live_view.start()
 
-        with events_path.open("w", encoding="utf-8") as event_file:
-            for packet in source.frames():
-                if packet.index % sample_every != 0:
-                    continue
+    try:
+        with VideoSource(source_uri, source_type=source_type, max_frames=max_frames) as source:
+            sample_every = max(1, int(round(source.source_fps / max(target_fps, 0.1))))
+            print(
+                f"Opened {source_type}: {source_uri} "
+                f"({source.frame_width}x{source.frame_height} @ {source.source_fps:.1f} fps, "
+                f"sample every {sample_every} frame(s) → ~{target_fps} FPS)"
+            )
 
-                people = detector.infer(packet.frame)
-                states = sm.states_snapshot()
+            with events_path.open("w", encoding="utf-8") as event_file:
+                for packet in source.frames():
+                    if packet.index % sample_every != 0:
+                        continue
 
-                for zone in zones:
-                    occupied, person, prim_id = primary.update(
-                        zone, packet.timestamp_seconds, people
-                    )
-                    signals = scorer.score(
-                        person,
-                        people,
-                        zone,
-                        packet.frame.shape[1],
-                        packet.frame.shape[0],
-                        occupied,
-                    )
-                    if person is not None:
-                        person.phone_score = signals.phone_score
-                    motion = person.motion_score if person else 0.0
-                    track_id = prim_id or (person.track_id if person else None)
-                    confidence = person.confidence if person else 0.0
-                    new_events = sm.update(
-                        zone.id,
-                        packet.timestamp_seconds,
-                        occupied,
-                        motion,
-                        track_id,
-                        confidence,
-                        signals,
-                    )
+                    people = detector.infer(packet.frame)
+                    states = sm.states_snapshot()
+
+                    for zone in zones:
+                        occupied, person, prim_id = primary.update(
+                            zone, packet.timestamp_seconds, people
+                        )
+                        signals = scorer.score(
+                            person,
+                            people,
+                            zone,
+                            packet.frame.shape[1],
+                            packet.frame.shape[0],
+                            occupied,
+                        )
+                        if person is not None:
+                            person.phone_score = signals.phone_score
+                        motion = person.motion_score if person else 0.0
+                        track_id = prim_id or (person.track_id if person else None)
+                        confidence = person.confidence if person else 0.0
+                        new_events = sm.update(
+                            zone.id,
+                            packet.timestamp_seconds,
+                            occupied,
+                            motion,
+                            track_id,
+                            confidence,
+                            signals,
+                        )
+                        states = sm.states_snapshot()
+                        prim_map = primary.primary_ids()
+                        prim_set = {v for v in prim_map.values() if v}
+                        for ev in new_events:
+                            if (
+                                include_snapshot
+                                and ev.event_type in _EVIDENCE_EVENT_TYPES
+                            ):
+                                rel = _save_evidence_snapshot(
+                                    packet.frame,
+                                    people,
+                                    zones,
+                                    states,
+                                    ev.event_type,
+                                    ev.zone_id,
+                                    ev.event_id,
+                                    ev.started_at,
+                                    evidence_dir,
+                                    camera_id,
+                                    packet.timestamp_seconds,
+                                    prim_map,
+                                    sm.behavior_labels(),
+                                )
+                                ev.snapshot_url = rel
+                                snapshot_count += 1
+                            event_file.write(json.dumps(ev.to_dict()) + "\n")
+                            event_file.flush()
+                            event_count += 1
+                            snap = f" snap={ev.snapshot_url}" if ev.snapshot_url else ""
+                            print(
+                                f"[event] {ev.event_type} reason={ev.reason} zone={ev.zone_id} "
+                                f"primary={prim_id} t={packet.timestamp_seconds:.1f}s "
+                                f"at={ev.started_at}{snap}"
+                            )
+
                     states = sm.states_snapshot()
                     prim_map = primary.primary_ids()
                     prim_set = {v for v in prim_map.values() if v}
-                    for ev in new_events:
-                        if (
-                            include_snapshot
-                            and ev.event_type in _EVIDENCE_EVENT_TYPES
-                        ):
-                            rel = _save_evidence_snapshot(
-                                packet.frame,
-                                people,
-                                zones,
-                                states,
-                                ev.event_type,
-                                ev.zone_id,
-                                ev.event_id,
-                                ev.started_at,
-                                evidence_dir,
-                                camera_id,
-                                packet.timestamp_seconds,
-                                prim_map,
-                                sm.behavior_labels(),
-                            )
-                            ev.snapshot_url = rel
-                            snapshot_count += 1
-                        event_file.write(json.dumps(ev.to_dict()) + "\n")
-                        event_file.flush()
-                        event_count += 1
-                        snap = f" snap={ev.snapshot_url}" if ev.snapshot_url else ""
-                        print(
-                            f"[event] {ev.event_type} reason={ev.reason} zone={ev.zone_id} "
-                            f"primary={prim_id} t={packet.timestamp_seconds:.1f}s "
-                            f"at={ev.started_at}{snap}"
-                        )
+                    if write_preview or live_view is not None:
+                        vis = packet.frame.copy()
+                        _draw_zones(vis, zones, states, prim_map, sm.behavior_labels())
+                        _draw_people(vis, people, prim_set)
+                        wall_label = ""
+                        if clip_start is not None:
+                            from datetime import timedelta
 
-                states = sm.states_snapshot()
-                prim_map = primary.primary_ids()
-                prim_set = {v for v in prim_map.values() if v}
-                if write_preview:
-                    vis = packet.frame.copy()
-                    _draw_zones(vis, zones, states, prim_map, sm.behavior_labels())
-                    _draw_people(vis, people, prim_set)
-                    wall_label = ""
-                    if clip_start is not None:
-                        from datetime import timedelta
-
-                        wall_label = " " + (clip_start + timedelta(seconds=packet.timestamp_seconds)).isoformat()
-                    prim_txt = ",".join(f"{k}:{v}" for k, v in prim_map.items() if v) or "-"
-                    cv2.putText(
-                        vis,
-                        f"{camera_id} t={packet.timestamp_seconds:.1f}s{wall_label} "
-                        f"events={event_count} primary={prim_txt}",
-                        (10, 24),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (255, 255, 255),
-                        2,
-                        cv2.LINE_AA,
-                    )
-                    if preview_scale != 1.0:
-                        vis = cv2.resize(
+                            wall_label = " " + (clip_start + timedelta(seconds=packet.timestamp_seconds)).isoformat()
+                        prim_txt = ",".join(f"{k}:{v}" for k, v in prim_map.items() if v) or "-"
+                        cv2.putText(
                             vis,
-                            None,
-                            fx=preview_scale,
-                            fy=preview_scale,
-                            interpolation=cv2.INTER_AREA,
+                            f"{camera_id} t={packet.timestamp_seconds:.1f}s{wall_label} "
+                            f"events={event_count} primary={prim_txt}",
+                            (10, 24),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5,
+                            (255, 255, 255),
+                            2,
+                            cv2.LINE_AA,
                         )
-                    if writer is None:
-                        h, w = vis.shape[:2]
-                        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-                        writer = cv2.VideoWriter(
-                            str(preview_path),
-                            fourcc,
-                            float(target_fps),
-                            (w, h),
-                        )
-                        if not writer.isOpened():
-                            raise RuntimeError(f"Could not open preview writer: {preview_path}")
-                    writer.write(vis)
+                        if live_view is not None:
+                            live_view.push(vis)
+                        if write_preview:
+                            if preview_scale != 1.0:
+                                vis = cv2.resize(
+                                    vis,
+                                    None,
+                                    fx=preview_scale,
+                                    fy=preview_scale,
+                                    interpolation=cv2.INTER_AREA,
+                                )
+                            if writer is None:
+                                h, w = vis.shape[:2]
+                                fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                                writer = cv2.VideoWriter(
+                                    str(preview_path),
+                                    fourcc,
+                                    float(target_fps),
+                                    (w, h),
+                                )
+                                if not writer.isOpened():
+                                    raise RuntimeError(f"Could not open preview writer: {preview_path}")
+                            writer.write(vis)
 
-                if packet.index > 0 and packet.index % (sample_every * 50) == 0:
-                    elapsed = time.time() - wall_start
-                    prim_dbg = primary.primary_ids()
-                    print(
-                        f"... frame {packet.index} video_t={packet.timestamp_seconds:.1f}s "
-                        f"wall={elapsed:.1f}s states={states} primary={prim_dbg}"
-                    )
+                    if packet.index > 0 and packet.index % (sample_every * 50) == 0:
+                        elapsed = time.time() - wall_start
+                        prim_dbg = primary.primary_ids()
+                        print(
+                            f"... frame {packet.index} video_t={packet.timestamp_seconds:.1f}s "
+                            f"wall={elapsed:.1f}s states={states} primary={prim_dbg}"
+                        )
+    except KeyboardInterrupt:
+        print("\nStopped with Ctrl+C - saving outputs...")
 
     if writer is not None:
         writer.release()
+    if live_view is not None:
+        live_view.stop()
 
     print(f"Done. events={event_count} snapshots={snapshot_count} → {events_path}")
     print(f"Evidence → {evidence_dir}")

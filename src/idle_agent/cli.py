@@ -107,6 +107,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Wall-clock start of the recording (ISO8601), e.g. 2026-11-18T15:00:05+05:00",
     )
     parser.add_argument(
+        "--live-view-port",
+        type=int,
+        default=None,
+        help="Serve the annotated frames live at http://localhost:PORT (e.g. 8090). "
+        "On a rented GPU open it through an SSH tunnel: ssh ... -L 8090:localhost:8090",
+    )
+    parser.add_argument(
         "--preview-scale",
         type=float,
         default=0.5,
@@ -149,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
         write_preview=not args.no_preview,
         clip_start=_parse_clip_start(args.clip_start),
         preview_scale=args.preview_scale,
+        live_view_port=args.live_view_port,
     )
     return 0
 

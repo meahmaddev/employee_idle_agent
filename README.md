@@ -45,6 +45,20 @@ Outputs: `output/preview.mp4` and `output/events.jsonl`.
 
 Live RTSP (after NVR credentials): same CLI with `--source rtsp --url "rtsp://..."`.
 
+## Live view (watch what the model sees)
+
+Add `--live-view-port 8090` to any run, then open `http://localhost:8090`.
+The page shows person boxes, zones and the current state for every processed frame.
+
+On a rented GPU (Vast.ai) the server only listens on the GPU itself, so forward
+the port through SSH from your PC (add `-L` to the tunnel command you already use):
+
+```powershell
+ssh -p PORT root@HOST -N -R 9090:PHONE_IP:8080 -L 8090:localhost:8090
+```
+
+Press `Ctrl+C` to stop a live run; outputs (events, evidence, preview) are saved cleanly.
+
 ## Tech stack (locked)
 
 - Ingest: RTSP / ONVIF (OpenCV / FFmpeg)
